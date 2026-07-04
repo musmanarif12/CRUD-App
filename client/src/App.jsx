@@ -12,6 +12,20 @@ function App() {
   // App Theme state
   const [lightTheme, setLightTheme] = useState(false);
 
+  // Modal State for Add Product
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    price: '',
+    category: 'Electronics',
+    quantity: '',
+    imageUrl: '',
+    description: ''
+  });
+
+  // Toasts Notification State
+  const [toasts, setToasts] = useState([]);
+
   const API_URL = 'http://localhost:5000/api/products';
 
   // Side-effect to toggle theme classes on the body element
@@ -22,6 +36,17 @@ function App() {
       document.body.classList.remove('light-theme');
     }
   }, [lightTheme]);
+
+  // Toast Helper to show notifications in top right
+  const triggerToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts((prevToasts) => [...prevToasts, { id, message, type }]);
+    
+    // Auto remove notification after 3.5 seconds
+    setTimeout(() => {
+      setToasts((prevToasts) => prevToasts.filter(t => t.id !== id));
+    }, 3500);
+  };
 
   // Function to fetch products from backend API
   const fetchProducts = async () => {
@@ -45,12 +70,13 @@ function App() {
       setProducts(data);
     } catch (err) {
       console.error('Error fetching products:', err.message);
+      triggerToast('Failed to load products from server', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Run fetchProducts when search or filters change (with debouncing for human input feel)
+  // Run fetchProducts when search or filters change
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
       fetchProducts();
@@ -59,6 +85,74 @@ function App() {
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, selectedCategory]);
 
+  // Handle input changes inside the Form
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
+
+  // Open modal with empty form for adding a new product
+  const openAddModal = () => {
+    setFormData({
+      name: '',
+      price: '',
+      category: 'Electronics',
+      quantity: '',
+      imageUrl: '',
+      description: ''
+    });
+    setIsModalOpen(true);
+  };
+
+  // Form submission handler to create product
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+
+    // Frontend validations
+    if (!formData.name.trim() || !formData.price || !formData.category) {
+      triggerToast('Required fields are missing', 'error');
+      return;
+    }
+
+    if (Number(formData.price) < 0 || Number(formData.quantity) < 0) {
+      triggerToast('Price and Quantity cannot be negative', 'error');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...formData,
+        price: Number(formData.price),
+        quantity: formData.quantity ? Number(formData.quantity) : 0
+      };
+      
+      // If imageUrl is empty, delete it so database schema default image is used
+      if (!payload.imageUrl.trim()) {
+        delete payload.imageUrl;
+      }
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to save product');
+      }
+
+      triggerToast('Product added successfully!');
+      setIsModalOpen(false); // Close Modal
+      fetchProducts(); // Refresh grid data
+    } catch (err) {
+      console.error('Error creating product:', err.message);
+      triggerToast(err.message || 'Failed to add product', 'error');
+    }
+  };
+
   // Dashboard Stats Calculations
   const totalProducts = products.length;
   const totalValue = products.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -66,9 +160,19 @@ function App() {
 
   // Categories list for dropdown selection
   const categoriesList = ['All', 'Electronics', 'Clothing', 'Home', 'Books', 'Other'];
+  const formCategories = ['Electronics', 'Clothing', 'Home', 'Books', 'Other'];
 
   return (
     <div className="app-container">
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast toast-${t.type}`}>
+            {t.type === 'success' ? '✅' : '❌'} {t.message}
+          </div>
+        ))}
+      </div>
+
       {/* Header Bar */}
       <header className="navbar">
         <div className="logo">
@@ -135,7 +239,7 @@ function App() {
           </select>
         </div>
         
-        <button className="btn btn-primary">
+        <button onClick={openAddModal} className="btn btn-primary">
           ➕ Add Product
         </button>
       </section>
@@ -202,6 +306,112 @@ function App() {
           ))}
         </div>
       )}
+
+      {/* Add Product Modal Overlay */}
+      <div className={`modal-overlay ${isModalOpen ? 'active' : ''}`}>
+        <div className="modal-content">
+          <div className="modal-header">
+            <h2 className="modal-title">Add New Product</h2>
+            <button onClick={() => setIsModalOpen(false)} className="modal-close-btn">&times;</button>
+          </div>
+          
+          <form onSubmit={handleFormSubmit}>
+            <div className="form-group">
+              <label className="form-label">Product Name *</label>
+              <input 
+                type="text" 
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="e.g. Wireless Mouse" 
+                className="form-input"
+                required
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Price ($) *</label>
+                <input 
+                  type="number" 
+                  name="price"
+                  value={formData.price}
+                  onChange={handleInputChange}
+                  placeholder="0.00" 
+                  step="0.01"
+                  min="0"
+                  className="form-input"
+                  required
+                />
+              </div>
+              
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Quantity *</label>
+                <input 
+                  type="number" 
+                  name="quantity"
+                  value={formData.quantity}
+                  onChange={handleInputChange}
+                  placeholder="0" 
+                  min="0"
+                  className="form-input"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Category *</label>
+              <select 
+                name="category"
+                value={formData.category}
+                onChange={handleInputChange}
+                className="form-input"
+              >
+                {formCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Image URL</label>
+              <input 
+                type="url" 
+                name="imageUrl"
+                value={formData.imageUrl}
+                onChange={handleInputChange}
+                placeholder="https://example.com/image.jpg" 
+                className="form-input"
+              />
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <textarea 
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                placeholder="Brief description of the product..." 
+                className="form-textarea"
+              />
+            </div>
+            
+            <div className="form-actions">
+              <button 
+                type="button" 
+                onClick={() => setIsModalOpen(false)} 
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Save Product
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
