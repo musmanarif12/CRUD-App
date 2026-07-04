@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
-import Metrics from './components/Metrics';
+import ProductCard from './components/ProductCard';
+import ProductModal from './components/ProductModal';
+import Toast from './components/Toast';
 
 function App() {
   // State for products list and loading indicator
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // State for filtering products
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  
+
   // App Theme state
   const [lightTheme, setLightTheme] = useState(false);
 
   // Modal State for Add/Edit Product
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editProductId, setEditProductId] = useState(null); // stores ID when editing, null when creating
+  const [editProductId, setEditProductId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -40,12 +42,11 @@ function App() {
     }
   }, [lightTheme]);
 
-  // Toast Helper to show notifications in top right
+  // Toast Helper to show notifications
   const triggerToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts((prevToasts) => [...prevToasts, { id, message, type }]);
-    
-    // Auto remove notification after 3.5 seconds
+
     setTimeout(() => {
       setToasts((prevToasts) => prevToasts.filter(t => t.id !== id));
     }, 3500);
@@ -56,7 +57,7 @@ function App() {
     try {
       setLoading(true);
       const query = new URLSearchParams();
-      
+
       if (searchTerm) {
         query.append('search', searchTerm);
       }
@@ -68,7 +69,7 @@ function App() {
       if (!response.ok) {
         throw new Error('Failed to retrieve products');
       }
-      
+
       const data = await response.json();
       setProducts(data);
     } catch (err) {
@@ -126,7 +127,6 @@ function App() {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
 
-    // Frontend validations
     if (!formData.name.trim() || !formData.price || !formData.category) {
       triggerToast('Required fields are missing', 'error');
       return;
@@ -143,8 +143,7 @@ function App() {
         price: Number(formData.price),
         quantity: formData.quantity ? Number(formData.quantity) : 0
       };
-      
-      // If imageUrl is empty, delete it so database schema default image is used
+
       if (!payload.imageUrl.trim()) {
         delete payload.imageUrl;
       }
@@ -155,9 +154,7 @@ function App() {
 
       const response = await fetch(url, {
         method: method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -167,8 +164,8 @@ function App() {
       }
 
       triggerToast(isEditing ? 'Product updated successfully!' : 'Product added successfully!');
-      setIsModalOpen(false); // Close Modal
-      fetchProducts(); // Refresh grid data
+      setIsModalOpen(false);
+      fetchProducts();
     } catch (err) {
       console.error('Error saving product:', err.message);
       triggerToast(err.message || 'Failed to save product', 'error');
@@ -181,61 +178,79 @@ function App() {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE'
-      });
+      const response = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
 
       if (!response.ok) {
         throw new Error('Failed to delete product');
       }
 
       triggerToast('Product deleted successfully!');
-      fetchProducts(); // Refresh grid data
+      fetchProducts();
     } catch (err) {
       console.error('Error deleting product:', err.message);
       triggerToast(err.message || 'Failed to delete product', 'error');
     }
   };
 
+  // Dashboard Stats Calculations
+  const totalProducts = products.length;
+  const totalValue = products.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const outOfStockCount = products.filter(item => item.quantity === 0).length;
 
-
-  // Categories list for dropdown selection
+  // Categories list for filter dropdown
   const categoriesList = ['All', 'Electronics', 'Clothing', 'Home', 'Books', 'Other'];
-  const formCategories = ['Electronics', 'Clothing', 'Home', 'Books', 'Other'];
 
   return (
     <div className="app-container">
-      {/* Toast Notifications */}
-      <div className="toast-container">
-        {toasts.map(t => (
-          <div key={t.id} className={`toast toast-${t.type}`}>
-            {t.type === 'success' ? '✅' : '❌'} {t.message}
-          </div>
-        ))}
-      </div>
+      {/* Toast Notifications Component */}
+      <Toast toasts={toasts} />
 
-      {/* Header Bar */}
+      {/* Navbar Component */}
       <Navbar lightTheme={lightTheme} setLightTheme={setLightTheme} />
 
       {/* Overview Stat Cards */}
-      <Metrics products={products} loading={loading} />
+      <section className="metrics-container">
+        <div className="metric-card">
+          <div className="metric-info">
+            <h3>Total Products</h3>
+            <p>{loading ? '...' : totalProducts}</p>
+          </div>
+          <div className="metric-icon">📦</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-info">
+            <h3>Inventory Value</h3>
+            <p>{loading ? '...' : `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</p>
+          </div>
+          <div className="metric-icon">💰</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-info">
+            <h3>Out of Stock</h3>
+            <p style={{ color: outOfStockCount > 0 ? 'var(--danger)' : 'var(--success)' }}>
+              {loading ? '...' : outOfStockCount}
+            </p>
+          </div>
+          <div className="metric-icon">⚠️</div>
+        </div>
+      </section>
 
       {/* Action and Filter Controls */}
       <section className="toolbar">
         <div className="search-filter-group">
           <div className="search-input-wrapper">
             <span className="search-icon">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Search products by name..." 
+            <input
+              type="text"
+              placeholder="Search products by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
             />
           </div>
-          
-          <select 
-            value={selectedCategory} 
+
+          <select
+            value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="category-select"
           >
@@ -244,13 +259,13 @@ function App() {
             ))}
           </select>
         </div>
-        
+
         <button onClick={openAddModal} className="btn btn-primary">
           ➕ Add Product
         </button>
       </section>
 
-      {/* Grid displaying the products */}
+      {/* Product Grid Section */}
       {loading ? (
         <div className="product-grid">
           {[1, 2, 3, 4].map(idx => (
@@ -274,150 +289,25 @@ function App() {
       ) : (
         <div className="product-grid">
           {products.map(product => (
-            <div key={product._id} className="product-card">
-              <div className="product-image-container">
-                <img 
-                  src={product.imageUrl} 
-                  alt={product.name} 
-                  className="product-image"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop';
-                  }}
-                />
-                <span className="product-category-badge">{product.category}</span>
-              </div>
-              
-              <div className="product-details">
-                <h3 className="product-name">{product.name}</h3>
-                <p className="product-desc">{product.description || 'No description provided.'}</p>
-                
-                <div className="product-meta">
-                  <span className="product-price">${Number(product.price).toFixed(2)}</span>
-                  <span className={`product-stock ${product.quantity > 0 ? 'stock-in' : 'stock-out'}`}>
-                    {product.quantity > 0 ? `${product.quantity} in stock` : 'Out of Stock'}
-                  </span>
-                </div>
-                
-                <div className="product-actions">
-                  <button onClick={() => openEditModal(product)} className="action-btn action-btn-edit">
-                    ✏️ Edit
-                  </button>
-                  <button onClick={() => handleDeleteProduct(product._id, product.name)} className="action-btn action-btn-delete">
-                    🗑️ Delete
-                  </button>
-                </div>
-              </div>
-            </div>
+            <ProductCard
+              key={product._id}
+              product={product}
+              onEdit={openEditModal}
+              onDelete={handleDeleteProduct}
+            />
           ))}
         </div>
       )}
 
-      {/* Add/Edit Product Modal Overlay */}
-      <div className={`modal-overlay ${isModalOpen ? 'active' : ''}`}>
-        <div className="modal-content">
-          <div className="modal-header">
-            <h2 className="modal-title">{editProductId ? 'Edit Product' : 'Add New Product'}</h2>
-            <button onClick={() => setIsModalOpen(false)} className="modal-close-btn">&times;</button>
-          </div>
-          
-          <form onSubmit={handleFormSubmit}>
-            <div className="form-group">
-              <label className="form-label">Product Name *</label>
-              <input 
-                type="text" 
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                placeholder="e.g. Wireless Mouse" 
-                className="form-input"
-                required
-              />
-            </div>
-            
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Price ($) *</label>
-                <input 
-                  type="number" 
-                  name="price"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  placeholder="0.00" 
-                  step="0.01"
-                  min="0"
-                  className="form-input"
-                  required
-                />
-              </div>
-              
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Quantity *</label>
-                <input 
-                  type="number" 
-                  name="quantity"
-                  value={formData.quantity}
-                  onChange={handleInputChange}
-                  placeholder="0" 
-                  min="0"
-                  className="form-input"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Category *</label>
-              <select 
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="form-input"
-              >
-                {formCategories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Image URL</label>
-              <input 
-                type="url" 
-                name="imageUrl"
-                value={formData.imageUrl}
-                onChange={handleInputChange}
-                placeholder="https://example.com/image.jpg" 
-                className="form-input"
-              />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Description</label>
-              <textarea 
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="Brief description of the product..." 
-                className="form-textarea"
-              />
-            </div>
-            
-            <div className="form-actions">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)} 
-                className="btn btn-secondary"
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary">
-                {editProductId ? 'Update Product' : 'Save Product'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+      {/* Product Modal Component */}
+      <ProductModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        formData={formData}
+        onChange={handleInputChange}
+        onSubmit={handleFormSubmit}
+        isEditing={editProductId !== null}
+      />
     </div>
   );
 }
