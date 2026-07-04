@@ -12,8 +12,9 @@ function App() {
   // App Theme state
   const [lightTheme, setLightTheme] = useState(false);
 
-  // Modal State for Add Product
+  // Modal State for Add/Edit Product
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editProductId, setEditProductId] = useState(null); // stores ID when editing, null when creating
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -93,6 +94,7 @@ function App() {
 
   // Open modal with empty form for adding a new product
   const openAddModal = () => {
+    setEditProductId(null);
     setFormData({
       name: '',
       price: '',
@@ -104,7 +106,21 @@ function App() {
     setIsModalOpen(true);
   };
 
-  // Form submission handler to create product
+  // Open modal with pre-filled form for editing an existing product
+  const openEditModal = (product) => {
+    setEditProductId(product._id);
+    setFormData({
+      name: product.name,
+      price: product.price,
+      category: product.category,
+      quantity: product.quantity,
+      imageUrl: product.imageUrl || '',
+      description: product.description || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  // Form submission handler to create or update product
   const handleFormSubmit = async (e) => {
     e.preventDefault();
 
@@ -131,8 +147,12 @@ function App() {
         delete payload.imageUrl;
       }
 
-      const response = await fetch(API_URL, {
-        method: 'POST',
+      const isEditing = editProductId !== null;
+      const url = isEditing ? `${API_URL}/${editProductId}` : API_URL;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json'
         },
@@ -144,12 +164,34 @@ function App() {
         throw new Error(errorData.message || 'Failed to save product');
       }
 
-      triggerToast('Product added successfully!');
+      triggerToast(isEditing ? 'Product updated successfully!' : 'Product added successfully!');
       setIsModalOpen(false); // Close Modal
       fetchProducts(); // Refresh grid data
     } catch (err) {
-      console.error('Error creating product:', err.message);
-      triggerToast(err.message || 'Failed to add product', 'error');
+      console.error('Error saving product:', err.message);
+      triggerToast(err.message || 'Failed to save product', 'error');
+    }
+  };
+
+  // Delete product handler
+  const handleDeleteProduct = async (id, name) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${name}"?`);
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete product');
+      }
+
+      triggerToast('Product deleted successfully!');
+      fetchProducts(); // Refresh grid data
+    } catch (err) {
+      console.error('Error deleting product:', err.message);
+      triggerToast(err.message || 'Failed to delete product', 'error');
     }
   };
 
@@ -294,10 +336,10 @@ function App() {
                 </div>
                 
                 <div className="product-actions">
-                  <button className="action-btn action-btn-edit">
+                  <button onClick={() => openEditModal(product)} className="action-btn action-btn-edit">
                     ✏️ Edit
                   </button>
-                  <button className="action-btn action-btn-delete">
+                  <button onClick={() => handleDeleteProduct(product._id, product.name)} className="action-btn action-btn-delete">
                     🗑️ Delete
                   </button>
                 </div>
@@ -307,11 +349,11 @@ function App() {
         </div>
       )}
 
-      {/* Add Product Modal Overlay */}
+      {/* Add/Edit Product Modal Overlay */}
       <div className={`modal-overlay ${isModalOpen ? 'active' : ''}`}>
         <div className="modal-content">
           <div className="modal-header">
-            <h2 className="modal-title">Add New Product</h2>
+            <h2 className="modal-title">{editProductId ? 'Edit Product' : 'Add New Product'}</h2>
             <button onClick={() => setIsModalOpen(false)} className="modal-close-btn">&times;</button>
           </div>
           
@@ -406,7 +448,7 @@ function App() {
                 Cancel
               </button>
               <button type="submit" className="btn btn-primary">
-                Save Product
+                {editProductId ? 'Update Product' : 'Save Product'}
               </button>
             </div>
           </form>
