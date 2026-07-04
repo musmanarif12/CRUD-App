@@ -20,6 +20,10 @@ app.get('/', (req, res) => {
     res.send('CRUD App Backend API is running successfully!');
 });
 
+// Import and use product routes
+const productRoutes = require('./routes/productRoutes');
+app.use('/api/products', productRoutes);
+
 // Port definition (defaults to 5000)
 const PORT = process.env.PORT || 5000;
 
