@@ -1,14 +1,11 @@
-import React from 'react';
-
-// Navbar Component: Renders the logo and theme toggle button
-const Navbar = ({ lightTheme, setLightTheme }) => {
+function Navbar({ lightTheme, setLightTheme }) {
   return (
     <header className="navbar">
       <div className="logo">
         📦 <span>StockFlow</span>
       </div>
-      <button 
-        onClick={() => setLightTheme(!lightTheme)} 
+      <button
+        onClick={() => setLightTheme(!lightTheme)}
         className="theme-toggle-btn"
         title={lightTheme ? 'Toggle Dark Mode' : 'Toggle Light Mode'}
       >
@@ -16,6 +13,6 @@ const Navbar = ({ lightTheme, setLightTheme }) => {
       </button>
     </header>
   );
-};
+}
 
 export default Navbar;
